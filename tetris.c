@@ -1,421 +1,359 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <time.h>
+#include <stdbool.h>
 
-// ============================================
-// ESTRUTURAS DE DADOS
-// ============================================
-
-// Estrutura para representar um cômodo da mansão (Árvore Binária)
-typedef struct Sala {
-    char nome[50];
-    struct Sala* esquerda;
-    struct Sala* direita;
-} Sala;
-
-// Estrutura para pista na árvore BST
-typedef struct Pista {
-    char texto[100];
-    struct Pista* esquerda;
-    struct Pista* direita;
-} Pista;
-
-// Estrutura para lista encadeada de pistas (usada na hash)
-typedef struct NoPista {
-    char pista[100];
-    char suspeito[50];
-    struct NoPista* proximo;
-} NoPista;
-
-// Estrutura da Tabela Hash
-#define TAMANHO_HASH 10
+// Struct Peca
 typedef struct {
-    NoPista* tabela[TAMANHO_HASH];
-} TabelaHash;
+    char tipo;
+    int id;
+} Peca;
 
-// ============================================
-// FUNÇÕES DA ÁRVORE BINÁRIA (MAPA DA MANSÃO)
-// ============================================
+// Struct para Fila Circular
+typedef struct {
+    Peca elementos[5];
+    int frente;
+    int tras;
+    int tamanho;
+    int capacidade;
+} FilaCircular;
 
-/**
- * criarSala() - Cria dinamicamente um cômodo da mansão
- * @nome: Nome do cômodo a ser criado
- * 
- * Aloca memória para uma nova sala e inicializa seus ponteiros
- * esquerda e direita como NULL.
- * 
- * Retorna: Ponteiro para a nova sala criada
- */
-Sala* criarSala(const char* nome) {
-    Sala* novaSala = (Sala*)malloc(sizeof(Sala));
-    if (novaSala != NULL) {
-        strcpy(novaSala->nome, nome);
-        novaSala->esquerda = NULL;
-        novaSala->direita = NULL;
+// Struct para Pilha Linear
+typedef struct {
+    Peca elementos[3];
+    int topo;
+    int capacidade;
+} Pilha;
+
+// Variável global para controlar ID sequencial
+int proximoId = 0;
+
+// ============ PROTÓTIPOS DAS FUNÇÕES ============
+// Funções da Fila
+void inicializarFila(FilaCircular *fila);
+bool filaCheia(FilaCircular *fila);
+bool filaVazia(FilaCircular *fila);
+void enqueue(FilaCircular *fila, Peca peca);
+Peca dequeue(FilaCircular *fila);
+void mostrarFila(FilaCircular *fila);
+
+// Funções da Pilha
+void inicializarPilha(Pilha *pilha);
+bool pilhaCheia(Pilha *pilha);
+bool pilhaVazia(Pilha *pilha);
+void push(Pilha *pilha, Peca peca);
+Peca pop(Pilha *pilha);
+void mostrarPilha(Pilha *pilha);
+
+// Funções auxiliares
+Peca gerarPeca();
+void limparTela();
+void exibirEstado(FilaCircular *fila, Pilha *pilha);
+void exibirMenu();
+
+// Funções de integração
+void trocarFrentePilha(FilaCircular *fila, Pilha *pilha);
+void trocarTresElementos(FilaCircular *fila, Pilha *pilha);
+
+// ============ IMPLEMENTAÇÃO DAS FUNÇÕES DA FILA ============
+
+void inicializarFila(FilaCircular *fila) {
+    fila->frente = 0;
+    fila->tras = 0;
+    fila->tamanho = 0;
+    fila->capacidade = 5;
+    
+    // Preenche a fila inicial com 5 peças
+    for(int i = 0; i < 5; i++) {
+        enqueue(fila, gerarPeca());
     }
-    return novaSala;
 }
 
-/**
- * obterPistaDaSala() - Retorna a pista associada a um cômodo específico
- * @nomeSala: Nome do cômodo para buscar a pista
- * @pistaOut: Buffer onde a pista será armazenada
- * @suspeitoOut: Buffer onde o suspeito será armazenado
- * 
- * Define as pistas fixas associadas a cada sala da mansão.
- * Cada sala possui uma pista única que aponta para um suspeito.
- * 
- * Retorna: 1 se a sala possui pista, 0 caso contrário
- */
-int obterPistaDaSala(const char* nomeSala, char* pistaOut, char* suspeitoOut) {
-    if (strcmp(nomeSala, "Biblioteca") == 0) {
-        strcpy(pistaOut, "Livro com paginas rasgadas");
-        strcpy(suspeitoOut, "Professor");
-        return 1;
-    } else if (strcmp(nomeSala, "Cozinha") == 0) {
-        strcpy(pistaOut, "Faca com manchas suspeitas");
-        strcpy(suspeitoOut, "Cozinheiro");
-        return 1;
-    } else if (strcmp(nomeSala, "Sotao") == 0) {
-        strcpy(pistaOut, "Carta anonima ameacadora");
-        strcpy(suspeitoOut, "Mordomo");
-        return 1;
-    } else if (strcmp(nomeSala, "Quarto") == 0) {
-        strcpy(pistaOut, "Relogio parado as 23h");
-        strcpy(suspeitoOut, "Professor");
-        return 1;
-    } else if (strcmp(nomeSala, "Jardim") == 0) {
-        strcpy(pistaOut, "Pegadas na terra molhada");
-        strcpy(suspeitoOut, "Jardineiro");
-        return 1;
-    } else if (strcmp(nomeSala, "Adega") == 0) {
-        strcpy(pistaOut, "Garrafa de veneno vazia");
-        strcpy(suspeitoOut, "Cozinheiro");
-        return 1;
-    } else if (strcmp(nomeSala, "Escritorio") == 0) {
-        strcpy(pistaOut, "Documento falsificado");
-        strcpy(suspeitoOut, "Mordomo");
-        return 1;
-    }
-    return 0;
+bool filaCheia(FilaCircular *fila) {
+    return fila->tamanho == fila->capacidade;
 }
 
-// ============================================
-// FUNÇÕES DA BST (ARMAZENAMENTO DE PISTAS)
-// ============================================
+bool filaVazia(FilaCircular *fila) {
+    return fila->tamanho == 0;
+}
 
-/**
- * inserirPista() - Insere uma pista na árvore BST de forma ordenada
- * @raiz: Raiz da árvore BST
- * @texto: Texto da pista a ser inserida
- * 
- * Utiliza strcmp para comparar strings e inserir a pista
- * na posição correta da árvore, mantendo a ordem alfabética.
- * Usa alocação dinâmica para criar novos nós.
- * 
- * Retorna: Nova raiz da árvore após inserção
- */
-Pista* inserirPista(Pista* raiz, const char* texto) {
-    if (raiz == NULL) {
-        Pista* novaPista = (Pista*)malloc(sizeof(Pista));
-        strcpy(novaPista->texto, texto);
-        novaPista->esquerda = NULL;
-        novaPista->direita = NULL;
-        return novaPista;
+void enqueue(FilaCircular *fila, Peca peca) {
+    if(filaCheia(fila)) {
+        printf("ERRO: Fila cheia!\n");
+        return;
     }
     
-    if (strcmp(texto, raiz->texto) < 0) {
-        raiz->esquerda = inserirPista(raiz->esquerda, texto);
-    } else if (strcmp(texto, raiz->texto) > 0) {
-        raiz->direita = inserirPista(raiz->direita, texto);
+    fila->elementos[fila->tras] = peca;
+    fila->tras = (fila->tras + 1) % fila->capacidade;
+    fila->tamanho++;
+}
+
+Peca dequeue(FilaCircular *fila) {
+    if(filaVazia(fila)) {
+        printf("ERRO: Fila vazia!\n");
+        Peca vazia = {' ', -1};
+        return vazia;
     }
     
-    return raiz;
-}
-
-/**
- * listarPistas() - Exibe todas as pistas em ordem alfabética
- * @raiz: Raiz da árvore BST de pistas
- * 
- * Utiliza percurso em-ordem (in-order traversal) recursivo
- * para exibir as pistas em ordem alfabética crescente.
- */
-void listarPistas(Pista* raiz) {
-    if (raiz != NULL) {
-        listarPistas(raiz->esquerda);
-        printf("  - %s\n", raiz->texto);
-        listarPistas(raiz->direita);
-    }
-}
-
-// ============================================
-// FUNÇÕES DA TABELA HASH
-// ============================================
-
-/**
- * funcaoHash() - Calcula o índice hash para uma chave
- * @chave: String usada como chave (pista)
- * 
- * Implementa função hash simples usando soma dos valores ASCII
- * dos caracteres da string, com deslocamento de bits para
- * melhor distribuição.
- * 
- * Retorna: Índice da tabela hash (0 a TAMANHO_HASH-1)
- */
-unsigned int funcaoHash(const char* chave) {
-    unsigned int hash = 0;
-    while (*chave) {
-        hash = (hash << 5) + *chave++;
-    }
-    return hash % TAMANHO_HASH;
-}
-
-/**
- * inicializarHash() - Inicializa a tabela hash
- * @tabela: Ponteiro para a tabela hash
- * 
- * Define todos os ponteiros da tabela como NULL,
- * preparando-a para receber inserções.
- */
-void inicializarHash(TabelaHash* tabela) {
-    for (int i = 0; i < TAMANHO_HASH; i++) {
-        tabela->tabela[i] = NULL;
-    }
-}
-
-/**
- * inserirNaHash() - Insere associação pista/suspeito na tabela hash
- * @tabela: Ponteiro para a tabela hash
- * @pista: Texto da pista (chave)
- * @suspeito: Nome do suspeito (valor)
- * 
- * Usa chaining (lista encadeada) para resolver colisões.
- * Insere o novo elemento no início da lista correspondente
- * ao índice calculado pela função hash.
- */
-void inserirNaHash(TabelaHash* tabela, const char* pista, const char* suspeito) {
-    unsigned int indice = funcaoHash(pista);
+    Peca peca = fila->elementos[fila->frente];
+    fila->frente = (fila->frente + 1) % fila->capacidade;
+    fila->tamanho--;
     
-    NoPista* novoNo = (NoPista*)malloc(sizeof(NoPista));
-    strcpy(novoNo->pista, pista);
-    strcpy(novoNo->suspeito, suspeito);
-    novoNo->proximo = tabela->tabela[indice];
-    tabela->tabela[indice] = novoNo;
+    return peca;
 }
 
-/**
- * encontrarSuspeito() - Consulta o suspeito correspondente a uma pista
- * @tabela: Ponteiro para a tabela hash
- * @pista: Pista a ser buscada
- * 
- * Calcula o índice hash e percorre a lista encadeada
- * correspondente até encontrar a pista desejada.
- * 
- * Retorna: Nome do suspeito ou NULL se não encontrado
- */
-char* encontrarSuspeito(TabelaHash* tabela, const char* pista) {
-    unsigned int indice = funcaoHash(pista);
-    NoPista* atual = tabela->tabela[indice];
+void mostrarFila(FilaCircular *fila) {
+    printf("Fila de pecas:\n");
     
-    while (atual != NULL) {
-        if (strcmp(atual->pista, pista) == 0) {
-            return atual->suspeito;
-        }
-        atual = atual->proximo;
-    }
-    return NULL;
-}
-
-/**
- * contarPistasPorSuspeito() - Conta quantas pistas apontam para um suspeito
- * @tabela: Ponteiro para a tabela hash
- * @nomeSuspeito: Nome do suspeito a ser contado
- * 
- * Percorre toda a tabela hash e conta quantas vezes
- * o suspeito aparece associado a pistas diferentes.
- * Usa recursão para percorrer as listas encadeadas.
- * 
- * Retorna: Número de pistas que apontam para o suspeito
- */
-int contarPistasPorSuspeito(TabelaHash* tabela, const char* nomeSuspeito) {
-    int contador = 0;
-    
-    for (int i = 0; i < TAMANHO_HASH; i++) {
-        NoPista* atual = tabela->tabela[i];
-        while (atual != NULL) {
-            if (strcmp(atual->suspeito, nomeSuspeito) == 0) {
-                contador++;
-            }
-            atual = atual->proximo;
-        }
+    if(filaVazia(fila)) {
+        printf("(Fila vazia)\n");
+        return;
     }
     
-    return contador;
-}
-
-// ============================================
-// FUNÇÕES DE EXPLORAÇÃO E GAMEPLAY
-// ============================================
-
-/**
- * explorarSalas() - Navega pela árvore de salas e ativa o sistema de pistas
- * @salaAtual: Sala onde o jogador está atualmente
- * @pistasBST: Ponteiro para a raiz da BST de pistas
- * @tabelaHash: Ponteiro para a tabela hash de associações
- * 
- * Função interativa que permite ao jogador navegar pela mansão.
- * Ao visitar cada sala, verifica se há pista e a adiciona
- * automaticamente à BST e à tabela hash.
- * Aceita comandos: 'e' (esquerda), 'd' (direita), 's' (sair)
- */
-void explorarSalas(Sala* salaAtual, Pista** pistasBST, TabelaHash* tabelaHash) {
-    char comando;
-    
-    while (1) {
-        printf("\n========================================\n");
-        printf("Voce esta no(a): %s\n", salaAtual->nome);
-        printf("========================================\n");
-        
-        // Verificar se há pista nesta sala
-        char pista[100], suspeito[50];
-        if (obterPistaDaSala(salaAtual->nome, pista, suspeito)) {
-            printf("\n[!] PISTA ENCONTRADA: %s\n", pista);
-            printf("[!] Esta pista pode estar relacionada a: %s\n", suspeito);
-            
-            // Adicionar pista na BST
-            *pistasBST = inserirPista(*pistasBST, pista);
-            
-            // Adicionar na tabela hash
-            inserirNaHash(tabelaHash, pista, suspeito);
-        } else {
-            printf("\nNenhuma pista encontrada nesta sala.\n");
-        }
-        
-        // Mostrar opções de navegação
-        printf("\nPara onde deseja ir?\n");
-        if (salaAtual->esquerda != NULL) {
-            printf("  [e] Ir para %s (esquerda)\n", salaAtual->esquerda->nome);
-        }
-        if (salaAtual->direita != NULL) {
-            printf("  [d] Ir para %s (direita)\n", salaAtual->direita->nome);
-        }
-        printf("  [s] Sair e fazer acusacao\n");
-        
-        printf("\nComando: ");
-        scanf(" %c", &comando);
-        
-        if (comando == 'e' && salaAtual->esquerda != NULL) {
-            salaAtual = salaAtual->esquerda;
-        } else if (comando == 'd' && salaAtual->direita != NULL) {
-            salaAtual = salaAtual->direita;
-        } else if (comando == 's') {
-            break;
-        } else {
-            printf("\n[X] Comando invalido! Tente novamente.\n");
-        }
+    int indice = fila->frente;
+    for(int i = 0; i < fila->tamanho; i++) {
+        printf("[%c %d] ", fila->elementos[indice].tipo, fila->elementos[indice].id);
+        indice = (indice + 1) % fila->capacidade;
     }
+    printf("\n");
 }
 
-/**
- * verificarSuspeitoFinal() - Conduz à fase de julgamento final
- * @tabelaHash: Ponteiro para a tabela hash de associações
- * 
- * Solicita ao jogador que acuse um suspeito e verifica
- * se existem pelo menos 2 pistas que sustentem a acusação.
- * Exibe o desfecho do jogo baseado na decisão do jogador.
- */
-void verificarSuspeitoFinal(TabelaHash* tabelaHash) {
-    char acusado[50];
+// ============ IMPLEMENTAÇÃO DAS FUNÇÕES DA PILHA ============
+
+void inicializarPilha(Pilha *pilha) {
+    pilha->topo = -1;
+    pilha->capacidade = 3;
+}
+
+bool pilhaCheia(Pilha *pilha) {
+    return pilha->topo == pilha->capacidade - 1;
+}
+
+bool pilhaVazia(Pilha *pilha) {
+    return pilha->topo == -1;
+}
+
+void push(Pilha *pilha, Peca peca) {
+    if(pilhaCheia(pilha)) {
+        printf("ERRO: Pilha cheia!\n");
+        return;
+    }
+    
+    pilha->topo++;
+    pilha->elementos[pilha->topo] = peca;
+}
+
+Peca pop(Pilha *pilha) {
+    if(pilhaVazia(pilha)) {
+        printf("ERRO: Pilha vazia!\n");
+        Peca vazia = {' ', -1};
+        return vazia;
+    }
+    
+    Peca peca = pilha->elementos[pilha->topo];
+    pilha->topo--;
+    
+    return peca;
+}
+
+void mostrarPilha(Pilha *pilha) {
+    printf("Pilha de reserva:\n");
+    
+    if(pilhaVazia(pilha)) {
+        printf("(Pilha vazia)\n");
+        return;
+    }
+    
+    printf("(Topo -> base): ");
+    for(int i = pilha->topo; i >= 0; i--) {
+        printf("[%c %d] ", pilha->elementos[i].tipo, pilha->elementos[i].id);
+    }
+    printf("\n");
+}
+
+// ============ FUNÇÕES AUXILIARES ============
+
+Peca gerarPeca() {
+    char tipos[] = {'I', 'O', 'T', 'L'};
+    Peca novaPeca;
+    
+    novaPeca.tipo = tipos[rand() % 4];
+    novaPeca.id = proximoId++;
+    
+    return novaPeca;
+}
+
+void limparTela() {
+    #ifdef _WIN32
+        system("cls");
+    #else
+        system("clear");
+    #endif
+}
+
+void exibirEstado(FilaCircular *fila, Pilha *pilha) {
+    printf("\n========================================\n");
+    printf("         ESTADO ATUAL\n");
+    printf("========================================\n\n");
+    
+    mostrarFila(fila);
+    printf("\n");
+    mostrarPilha(pilha);
     
     printf("\n========================================\n");
-    printf("        HORA DA ACUSACAO FINAL!\n");
-    printf("========================================\n");
-    printf("\nSuspeitos disponiveis:\n");
-    printf("  1. Professor\n");
-    printf("  2. Cozinheiro\n");
-    printf("  3. Mordomo\n");
-    printf("  4. Jardineiro\n");
-    
-    printf("\nQuem voce acusa? Digite o nome: ");
-    scanf("%s", acusado);
-    
-    int numPistas = contarPistasPorSuspeito(tabelaHash, acusado);
-    
-    printf("\n========================================\n");
-    printf("           VEREDICTO FINAL\n");
-    printf("========================================\n");
-    printf("\nVoce acusou: %s\n", acusado);
-    printf("Numero de pistas coletadas: %d\n", numPistas);
-    
-    if (numPistas >= 2) {
-        printf("\n[SUCESSO] Parabens, detetive!\n");
-        printf("Voce reuniu evidencias suficientes (%d pistas)\n", numPistas);
-        printf("para provar que %s eh o culpado!\n", acusado);
-        printf("\nO caso foi resolvido com maestria!\n");
-    } else {
-        printf("\n[FALHA] Infelizmente, voce nao reuniu evidencias\n");
-        printf("suficientes para sustentar sua acusacao.\n");
-        printf("Sao necessarias pelo menos 2 pistas.\n");
-        printf("\nO verdadeiro culpado escapou...\n");
-    }
 }
 
-// ============================================
-// FUNÇÃO PRINCIPAL
-// ============================================
+void exibirMenu() {
+    printf("\n--- TETRIS STACK - MENU ---\n");
+    printf("1 - Jogar peca da frente da fila\n");
+    printf("2 - Enviar peca da fila para a pilha de reserva\n");
+    printf("3 - Usar peca da pilha de reserva\n");
+    printf("4 - Trocar peca da frente da fila com o topo da pilha\n");
+    printf("5 - Trocar os 3 primeiros da fila com as 3 pecas da pilha\n");
+    printf("0 - Sair\n");
+    printf("---------------------------\n");
+    printf("Opcao escolhida: ");
+}
+
+// ============ FUNÇÕES DE INTEGRAÇÃO (NÍVEL MESTRE) ============
+
+void trocarFrentePilha(FilaCircular *fila, Pilha *pilha) {
+    // Validações
+    if(filaVazia(fila)) {
+        printf("\nERRO: Fila vazia! Nao e possivel realizar a troca.\n");
+        return;
+    }
+    
+    if(pilhaVazia(pilha)) {
+        printf("\nERRO: Pilha vazia! Nao e possivel realizar a troca.\n");
+        return;
+    }
+    
+    // Troca direta nos arrays
+    Peca temp = fila->elementos[fila->frente];
+    fila->elementos[fila->frente] = pilha->elementos[pilha->topo];
+    pilha->elementos[pilha->topo] = temp;
+    
+    printf("\nAcao: troca realizada entre a peca da frente da fila e o topo da pilha.\n");
+}
+
+void trocarTresElementos(FilaCircular *fila, Pilha *pilha) {
+    // Validações
+    if(fila->tamanho < 3) {
+        printf("\nERRO: A fila precisa ter pelo menos 3 pecas!\n");
+        return;
+    }
+    
+    if(pilha->topo != 2) {
+        printf("\nERRO: A pilha precisa ter exatamente 3 pecas!\n");
+        return;
+    }
+    
+    // Armazena as 3 peças da fila temporariamente
+    Peca tempFila[3];
+    int indice = fila->frente;
+    
+    for(int i = 0; i < 3; i++) {
+        tempFila[i] = fila->elementos[indice];
+        indice = (indice + 1) % fila->capacidade;
+    }
+    
+    // Substitui os 3 primeiros da fila pelas 3 da pilha (topo para base)
+    indice = fila->frente;
+    for(int i = pilha->topo; i >= 0; i--) {
+        fila->elementos[indice] = pilha->elementos[i];
+        indice = (indice + 1) % fila->capacidade;
+    }
+    
+    // Substitui as 3 da pilha pelas 3 que estavam na fila (invertendo a ordem)
+    for(int i = 0; i < 3; i++) {
+        pilha->elementos[i] = tempFila[2 - i];
+    }
+    
+    printf("\nAcao: troca realizada entre os 3 primeiros da fila e os 3 da pilha.\n");
+}
+
+// ============ FUNÇÃO PRINCIPAL ============
 
 int main() {
-    printf("\n");
-    printf("*******************************************\n");
-    printf("*                                         *\n");
-    printf("*        DETECTIVE QUEST                 *\n");
-    printf("*      O Misterio da Mansao Sombria      *\n");
-    printf("*                                         *\n");
-    printf("*******************************************\n");
-    printf("\nBem-vindo, detetive!\n");
-    printf("Um crime horrivel foi cometido na mansao.\n");
-    printf("Explore os comodos, colete pistas e\n");
-    printf("descubra quem eh o culpado!\n");
+    // Inicializa o gerador de números aleatórios
+    srand(time(NULL));
     
-    // Criar o mapa da mansão (Árvore Binária fixa)
-    Sala* hall = criarSala("Hall de Entrada");
-    Sala* biblioteca = criarSala("Biblioteca");
-    Sala* cozinha = criarSala("Cozinha");
-    Sala* sotao = criarSala("Sotao");
-    Sala* quarto = criarSala("Quarto");
-    Sala* jardim = criarSala("Jardim");
-    Sala* adega = criarSala("Adega");
-    Sala* escritorio = criarSala("Escritorio");
+    FilaCircular fila;
+    Pilha pilha;
     
-    // Montar a estrutura da árvore
-    hall->esquerda = biblioteca;
-    hall->direita = cozinha;
-    biblioteca->esquerda = sotao;
-    biblioteca->direita = quarto;
-    cozinha->esquerda = jardim;
-    cozinha->direita = adega;
-    jardim->esquerda = escritorio;
+    inicializarFila(&fila);
+    inicializarPilha(&pilha);
     
-    // Inicializar a BST de pistas e a tabela hash
-    Pista* pistasBST = NULL;
-    TabelaHash tabelaHash;
-    inicializarHash(&tabelaHash);
+    int opcao;
     
-    // Iniciar exploração
-    explorarSalas(hall, &pistasBST, &tabelaHash);
-    
-    // Mostrar todas as pistas coletadas em ordem
-    printf("\n========================================\n");
-    printf("     PISTAS COLETADAS (em ordem)\n");
-    printf("========================================\n");
-    listarPistas(pistasBST);
-    
-    // Fase de acusação final
-    verificarSuspeitoFinal(&tabelaHash);
-    
-    printf("\n========================================\n");
-    printf("         Obrigado por jogar!\n");
-    printf("========================================\n\n");
+    do {
+        exibirEstado(&fila, &pilha);
+        exibirMenu();
+        scanf("%d", &opcao);
+        
+        switch(opcao) {
+            case 1: // Jogar peça
+                if(!filaVazia(&fila)) {
+                    Peca jogada = dequeue(&fila);
+                    printf("\nAcao: peca [%c %d] jogada!\n", jogada.tipo, jogada.id);
+                    
+                    // Repõe a fila com nova peça
+                    enqueue(&fila, gerarPeca());
+                } else {
+                    printf("\nERRO: Fila vazia!\n");
+                }
+                break;
+                
+            case 2: // Enviar para pilha
+                if(pilhaCheia(&pilha)) {
+                    printf("\nERRO: Pilha cheia! Nao e possivel adicionar mais pecas.\n");
+                } else if(filaVazia(&fila)) {
+                    printf("\nERRO: Fila vazia!\n");
+                } else {
+                    Peca enviada = dequeue(&fila);
+                    push(&pilha, enviada);
+                    printf("\nAcao: peca [%c %d] enviada para a pilha de reserva!\n", 
+                           enviada.tipo, enviada.id);
+                    
+                    // Repõe a fila com nova peça
+                    enqueue(&fila, gerarPeca());
+                }
+                break;
+                
+            case 3: // Usar da pilha
+                if(!pilhaVazia(&pilha)) {
+                    Peca usada = pop(&pilha);
+                    printf("\nAcao: peca [%c %d] usada da pilha de reserva!\n", 
+                           usada.tipo, usada.id);
+                } else {
+                    printf("\nERRO: Pilha vazia!\n");
+                }
+                break;
+                
+            case 4: // Trocar frente com topo
+                trocarFrentePilha(&fila, &pilha);
+                break;
+                
+            case 5: // Trocar 3 elementos
+                trocarTresElementos(&fila, &pilha);
+                break;
+                
+            case 0:
+                printf("\nEncerrando o programa...\n");
+                break;
+                
+            default:
+                printf("\nOpcao invalida! Tente novamente.\n");
+        }
+        
+        if(opcao != 0) {
+            printf("\nPressione ENTER para continuar...");
+            getchar();
+            getchar();
+        }
+        
+    } while(opcao != 0);
     
     return 0;
 }
